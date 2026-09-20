@@ -128,13 +128,22 @@ class DefaultEngine:
             self._console.write(f"iteration               {info.get('iteration_found', '?')}")
         self._console.write("\n" + source)
 
-    def evolve(self, iterations: int | None, backend: str | None = None) -> None:
+    def evolve(
+        self,
+        iterations: int | None,
+        backend: str | None = None,
+        seed: str | None = None,
+    ) -> None:
         settings = self._evolution_settings
         if iterations is not None:
             settings = settings.model_copy(update={"iterations": iterations})
         if backend is not None:
             settings = settings.model_copy(
                 update={"config_path": self._backend_config_path(backend)}
+            )
+        if seed is not None:
+            settings = settings.model_copy(
+                update={"initial_program_path": self._seed_program_path(seed)}
             )
         self._logger.info(
             f"evolving for {settings.iterations} iterations "
@@ -148,6 +157,11 @@ class DefaultEngine:
     def _backend_config_path(backend: str) -> Path:
         """Map a backend name onto its OpenEvolve config file."""
         return Path("evolution") / f"config.{backend}.yaml"
+
+    @staticmethod
+    def _seed_program_path(seed: str) -> Path:
+        """Map a seed name onto its starting program."""
+        return Path("evolution") / "seeds" / f"{seed}.py"
 
     def _score_map(self, digit_map: DigitMap) -> ScoreCard:
         return self._scoring_policy.score(self._analyzer.analyze(digit_map))

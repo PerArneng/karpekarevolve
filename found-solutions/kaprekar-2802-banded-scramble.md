@@ -19,17 +19,23 @@ real routine: the repdigit basin.
 
 ## Scores
 
-| Factor | Kaprekar baseline | This map |
-|---|---|---|
-| `combined_score` | 0.585457 | **1.000000** |
-| `dominance` | 0.998500 | 1.000000 |
-| `parsimony` | 0.800000 | 1.000000 |
-| `cycle_quality` | 1.000000 | 1.000000 |
-| `depth_score` | 0.732920 | 1.000000 |
-| attractors | 2 (`[6174]`, `[0000]`) | 1 (`[2802]`) |
-| dominant basin | 99.90% | 100.00% |
-| mean / max depth | 4.66 / 7 | 7.60 / 14 |
-| distinct outputs | 55 (0.55%) | 55 (0.55%) |
+> **Scoring units changed after this was written.** The map was found under
+> `ScoreWeights.depth_span = 5.0`, where `depth_score` saturated at mean depth 6 and
+> this map scored a flat **1.000000**. `depth_span` is now **10.0**, under which it
+> scores **0.659610** and the baseline scores **0.292728**. The table below gives both.
+> Nothing about the map changed - only the yardstick.
+
+| Factor | Kaprekar baseline (span 10) | This map (span 10) | This map (span 5, as found) |
+|---|---|---|---|
+| `combined_score` | 0.292728 | **0.659610** | 1.000000 |
+| `dominance` | 0.998500 | 1.000000 | 1.000000 |
+| `parsimony` | 0.800000 | 1.000000 | 1.000000 |
+| `cycle_quality` | 1.000000 | 1.000000 | 1.000000 |
+| `depth_score` | 0.366460 | 0.659610 | 1.000000 |
+| attractors | 2 (`[6174]`, `[0000]`) | 1 (`[2802]`) | 1 (`[2802]`) |
+| dominant basin | 99.90% | 100.00% | 100.00% |
+| mean / max depth | 4.66 / 7 | 7.60 / 14 | 7.60 / 14 |
+| distinct outputs | 55 (0.55%) | 55 (0.55%) | 55 (0.55%) |
 
 ## The code
 

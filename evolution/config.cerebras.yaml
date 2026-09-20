@@ -84,7 +84,10 @@ prompt:
     - parsimony     - falls off with the number of distinct attractors. Aim for one.
     - cycle_quality - a fixed point (cycle of length 1) beats a long terminal cycle.
     - depth_score   - rises with the MEAN number of steps a value needs to settle, and
-                      saturates around 6 steps. THIS IS THE ANTI-TRIVIALITY TERM.
+                      saturates around 11 steps. THIS IS THE ANTI-TRIVIALITY TERM.
+                      Depth is where the headroom is: a map that settles in 5 steps
+                      scores about half what an otherwise identical map settling in
+                      10 steps does. Lengthen the transient paths.
 
     # KNOWN DEAD ENDS - do not propose these, they all score 0.0
     - `return 6174` or any constant: one attractor, mean depth 1, depth_score 0.

@@ -9,7 +9,7 @@ def test_baseline_command_runs_end_to_end() -> None:
     result = RUNNER.invoke(app, ["baseline"])
 
     assert result.exit_code == 0
-    assert "0.585457" in result.stdout
+    assert "0.292728" in result.stdout
 
 
 def test_trace_command_runs_end_to_end() -> None:

@@ -40,9 +40,15 @@ class Engine(Protocol):
         """Report the best program left behind by the last evolution run."""
         ...
 
-    def evolve(self, iterations: int | None, backend: str | None = None) -> None:
+    def evolve(
+        self,
+        iterations: int | None,
+        backend: str | None = None,
+        seed: str | None = None,
+    ) -> None:
         """Run an evolution and report the winner.
 
         `backend` names a config in `evolution/`, e.g. "cerebras".
+        `seed` names a starting program in `evolution/seeds/`, e.g. "reverse_add".
         """
         ...

@@ -14,12 +14,12 @@ stable attractor.
 $ uv run kaprekarevolve baseline
 Kaprekar routine (baseline)
 ===========================
-combined_score          0.585457
+combined_score          0.292728
 
   dominance             0.998500
   parsimony             0.800000
   cycle_quality         1.000000
-  depth_score           0.732920
+  depth_score           0.366460
 
 attractors              2
 dominant basin          99.9000% of 10000
@@ -72,6 +72,7 @@ uv run kaprekarevolve trace 9831            # walk one number to its attractor
 uv run kaprekarevolve score <program.py>    # score a candidate
 uv run kaprekarevolve evolve -n 200         # search for new maps
 uv run kaprekarevolve evolve -b cerebras    # ... on a different LLM backend
+uv run kaprekarevolve evolve -s reverse_add # ... from a different seed program
 uv run kaprekarevolve best                  # re-score the winner of the last run
 ```
 
@@ -86,6 +87,25 @@ uv run kaprekarevolve best                  # re-score the winner of the last ru
 
 Adding a backend means dropping `evolution/config.<name>.yaml` next to the others — the
 name on the command line *is* the filename, so no code change is needed.
+
+### Seed programs
+
+`--seed`/`-s` picks the starting program from `evolution/seeds/`, the same way:
+
+| Seed | Score | Attractors | Mean depth | Weakness it starts with |
+|---|---|---|---|---|
+| `kaprekar` (default) | 0.292728 | 2 | 4.66 | the repdigit basin |
+| `digit_pair_gap` | 0.197090 | 1 | 2.97 | settles far too quickly |
+| `digit_power_sum` | 0.029826 | 10 | 6.04 | scattered across many attractors |
+| `reverse_add` | 0.010247 | 3 | 19.97 | already deeper than the cap; limited by its 3 basins |
+
+Seeding matters more than it looks. In a 200-iteration run from `kaprekar`, **all 201
+programs in the final population still contained the descending-minus-ascending step** —
+the search decorated the seed rather than leaving it. Starting elsewhere is how you find
+out whether other families can do as well.
+
+Note that OpenEvolve cannot take several seeds at once: passing a list to
+`run_evolution` concatenates them into a single file. One family per run, then compare.
 
 The two files share everything but their `llm:` block. That duplication is deliberate
 (OpenEvolve has no config includes) but it does mean a prompt or database change must be
@@ -106,7 +126,7 @@ src/kaprekarevolve/
   container.py  dependency-injector wiring
   cli/main.py   Typer frontend
 evolution/
-  initial_program.py   seed program, inside EVOLVE-BLOCK markers
+  seeds/<name>.py      seed programs, inside EVOLVE-BLOCK markers
   evaluator.py         OpenEvolve adapter -> the same Engine the CLI calls
   config.<backend>.yaml  one OpenEvolve config per LLM backend
 scripts/

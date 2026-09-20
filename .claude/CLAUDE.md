@@ -50,9 +50,11 @@ Output diversity is deliberately **not** scored: the real Kaprekar map emits onl
 distinct values out of 10000, so rewarding a wide image would punish the thing being
 imitated. `image_ratio` is exported as a MAP-Elites feature instead.
 
-**The baseline scores `0.585457`, and that number is pinned in four files** —
+**The baseline scores `0.292728`, and that number is pinned in four files** —
 `tests/unit/test_weighted_scoring_policy.py`, `tests/integration/test_engine.py`,
 `tests/integration/test_cli.py`, and the README's comparison table. Tuning
+Note `tests/unit/test_weighted_scoring_policy.py` also pins a `depth_score` value
+(currently `0.4499`) that moves with `depth_span` but is not the baseline. Tuning
 `ScoreWeights` (e.g. raising `depth_span` so a 200-iteration run keeps discriminating
 past the current 1.0 ceiling) is a reasonable thing to want, but update all four or the
 suite goes red for the wrong reason.
@@ -107,10 +109,11 @@ through fakes plus a CLI smoke test. No test should touch the real filesystem.
 - `evolution/evaluator.py` is a frontend adapter over the same `Engine` the CLI calls.
   Keep it that way: the score the evolution loop optimises and the score
   `kaprekarevolve score` prints must not be able to drift apart. `uv run python
-  evolution/evaluator.py evolution/initial_program.py` should always agree with
+  evolution/evaluator.py evolution/seeds/kaprekar.py` should always agree with
   `uv run kaprekarevolve score` on the same file.
 - Candidate programs define `transform(value)` inside `EVOLVE-BLOCK-START/END` markers.
 - `checkpoint_interval` defaults to **100**, so a short run leaves nothing to visualize.
-  Set it explicitly in `evolution/config.yaml` before a run you intend to inspect.
+  Set it explicitly in `evolution/config.<backend>.yaml` before a run you intend to
+  inspect.
 - For anything about inspecting or plotting a run, use the **`openevolve-viz` skill** in
   `.claude/skills/` rather than hand-rolling checkpoint parsing.

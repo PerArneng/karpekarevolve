@@ -63,7 +63,7 @@ def test_scoring_a_candidate_file_matches_the_builtin_baseline() -> None:
 
     card = harness.engine.score_path(CANDIDATE)
 
-    assert card.combined_score == pytest.approx(0.585457, abs=1e-6)
+    assert card.combined_score == pytest.approx(0.292728, abs=1e-6)
 
 
 def test_the_cascade_stages_agree_on_a_sound_candidate() -> None:
@@ -103,7 +103,7 @@ def test_show_baseline_reports_6174() -> None:
     harness.engine.show_baseline()
 
     assert "6174" in harness.console.text
-    assert "0.585457" in harness.console.text
+    assert "0.292728" in harness.console.text
 
 
 def test_show_trace_walks_the_baseline() -> None:
@@ -159,6 +159,37 @@ def test_evolve_backend_and_iterations_compose() -> None:
     call = harness.runner.calls[0]
     assert call.iterations == 7
     assert call.config_path == Path("evolution/config.cerebras.yaml")
+
+
+def test_evolve_defaults_to_the_kaprekar_seed() -> None:
+    harness = Harness()
+
+    harness.engine.evolve(None)
+
+    assert harness.runner.calls[0].initial_program_path == Path(
+        "evolution/seeds/kaprekar.py"
+    )
+
+
+def test_evolve_selects_the_named_seed() -> None:
+    harness = Harness()
+
+    harness.engine.evolve(None, None, "reverse_add")
+
+    assert harness.runner.calls[0].initial_program_path == Path(
+        "evolution/seeds/reverse_add.py"
+    )
+
+
+def test_evolve_seed_and_backend_are_independent() -> None:
+    harness = Harness()
+
+    harness.engine.evolve(5, "cerebras", "digit_power_sum")
+
+    call = harness.runner.calls[0]
+    assert call.iterations == 5
+    assert call.config_path == Path("evolution/config.cerebras.yaml")
+    assert call.initial_program_path == Path("evolution/seeds/digit_power_sum.py")
 
 
 def test_evolve_without_an_override_keeps_the_configured_iterations() -> None:

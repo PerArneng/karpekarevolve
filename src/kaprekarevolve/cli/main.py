@@ -83,10 +83,18 @@ def evolve(
             help="LLM backend: brain-tailscale (default) or cerebras",
         ),
     ] = None,
+    seed: Annotated[
+        str | None,
+        typer.Option(
+            "--seed",
+            "-s",
+            help="starting program in evolution/seeds/ (default: kaprekar)",
+        ),
+    ] = None,
 ) -> None:
     """Run OpenEvolve to search for new maps."""
     _load_env_file(ENV_FILE)
-    _engine().evolve(iterations, backend)
+    _engine().evolve(iterations, backend, seed)
 
 
 @app.command()
