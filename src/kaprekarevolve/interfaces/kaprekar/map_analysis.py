@@ -19,3 +19,5 @@ class MapAnalysis(BaseModel):
     image_size: int
     image_ratio: float
     fixed_point_count: int
+    depth_histogram: tuple[tuple[int, int], ...]
+    indegree_histogram: tuple[tuple[int, int], ...]

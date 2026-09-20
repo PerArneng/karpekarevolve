@@ -22,7 +22,7 @@ every visualization comes up empty. This is the single most common reason "the
 visualizer shows nothing".
 
 If `openevolve_output/checkpoints/` is missing or empty, that is the diagnosis. Fix it
-in `evolution/config.yaml` before the next run:
+in `evolution/config.<backend>.yaml` before the next run:
 
 ```yaml
 max_iterations: 200
@@ -73,16 +73,17 @@ Useful flags:
 | Flag | Why |
 |---|---|
 | `--metric mean_depth` | rank by something other than `combined_score` |
-| `--spread attractor_count` | bucket the population over a feature — the poor man's MAP-Elites grid |
+| `--spread elegance` | bucket the population over a feature — the poor man's MAP-Elites grid |
 | `--top 10` | show more of the leaderboard |
 | `--csv /tmp/run.csv` | dump every program's metrics for your own plotting |
 
 In this project the metrics worth passing are the ones
-`DefaultEvaluationProjector` emits: `combined_score`, `dominance`, `parsimony`,
-`cycle_quality`, `depth_score`, `attractor_count`, `dominant_basin_fraction`,
-`dominant_cycle_length`, `mean_depth`, `max_depth`, `image_ratio`,
+`DefaultEvaluationProjector` emits: `combined_score`, `validity`, `dominance`,
+`attractor_focus`, `cycle_quality`, `depth_score`, `elegance`, `novelty`,
+`attractor_count`, `dominant_basin_fraction`, `dominant_cycle_length`, `mean_depth`,
+`max_depth`, `image_ratio`, `depth_ratio`, `elegance_cost`,
 `fixed_point_count`, `validity`. The three the MAP-Elites grid is configured on live
-under `database.feature_dimensions` in `evolution/config.yaml`.
+under `database.feature_dimensions` in `evolution/config.<backend>.yaml`.
 
 When a summary shows the score flat across every checkpoint, say so plainly and look
 at `validity` in the spread — a population of rejected candidates (validity 0) means
@@ -144,7 +145,7 @@ way to answer "is it still improving?" without restarting anything.
 ## When you need something the tools do not show
 
 `evolution_trace` writes one JSONL record per evolution step and ships *with* the
-package, so it needs no clone. It is off by default; enable it in `evolution/config.yaml`:
+package, so it needs no clone. It is off by default; enable it in `evolution/config.<backend>.yaml`:
 
 ```yaml
 evolution_trace:

@@ -98,6 +98,12 @@ def evolve(
 
 
 @app.command()
+def catalogue() -> None:
+    """Enumerate short formula maps and record the structures they already reach."""
+    _engine().show_catalogue()
+
+
+@app.command()
 def best() -> None:
     """Show the best program from the last evolution run."""
     _engine().show_best()

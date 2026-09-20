@@ -36,6 +36,10 @@ class Engine(Protocol):
         """Report the walk of ``seed`` under a candidate, or under the baseline."""
         ...
 
+    def show_catalogue(self) -> None:
+        """Enumerate the short-formula family and record what it already reaches."""
+        ...
+
     def show_best(self) -> None:
         """Report the best program left behind by the last evolution run."""
         ...

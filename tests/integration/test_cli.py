@@ -9,7 +9,9 @@ def test_baseline_command_runs_end_to_end() -> None:
     result = RUNNER.invoke(app, ["baseline"])
 
     assert result.exit_code == 0
-    assert "0.292728" in result.stdout
+    # Kaprekar's own structure is in the committed catalogue, so the baseline is
+    # scored as the prior art it is. See found-solutions/registry.json.
+    assert "0.019311" in result.stdout
 
 
 def test_trace_command_runs_end_to_end() -> None:
@@ -24,5 +26,5 @@ def test_bare_invocation_lists_the_commands() -> None:
 
     # Typer exits 2 for a missing command; what matters is that it lists them.
     assert result.exit_code == 2
-    for command in ("baseline", "score", "trace", "evolve", "best"):
+    for command in ("baseline", "score", "trace", "evolve", "catalogue", "best"):
         assert command in result.output

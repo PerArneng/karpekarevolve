@@ -3,15 +3,20 @@ from pathlib import Path
 
 import pytest
 
+from kaprekarevolve.interfaces.catalogue import CatalogueSettings
 from kaprekarevolve.interfaces.evolution import EvolutionResult, EvolutionSettings
-from kaprekarevolve.interfaces.kaprekar import AnalysisSettings
+from kaprekarevolve.interfaces.kaprekar import AnalysisSettings, BaselineProgram
+from kaprekarevolve.interfaces.novelty import NoveltyRegistry
 from kaprekarevolve.interfaces.scoring import ScoreWeights
+from kaprekarevolve.modules.catalogue import FormulaCataloguer
 from kaprekarevolve.modules.engine import DefaultEngine
 from kaprekarevolve.modules.kaprekar import BuiltinKaprekarMap, MemoizedMapAnalyzer
 from kaprekarevolve.modules.log import AnsiLogFormatter, DefaultLogger
+from kaprekarevolve.modules.novelty import AnalysisFingerprinter
 from kaprekarevolve.modules.program import ExecProgramLoader
 from kaprekarevolve.modules.report import TextReportFormatter
 from kaprekarevolve.modules.scoring import DefaultEvaluationProjector, WeightedScoringPolicy
+from kaprekarevolve.modules.shape import AstShapeAnalyzer
 from tests.fakes import (
     FrozenClock,
     InMemoryConsole,
@@ -20,18 +25,20 @@ from tests.fakes import (
 )
 
 CANDIDATE = Path("candidate.py")
-KAPREKAR_SOURCE = (
-    "def transform(value):\n"
-    "    digits = f'{value:04d}'\n"
-    "    return int(''.join(sorted(digits, reverse=True))) - int(''.join(sorted(digits)))\n"
-)
+#: The same text the baseline is scored from, so the two paths are comparable at all.
+KAPREKAR_SOURCE = BaselineProgram().source
 
 
 class Harness:
     """The whole application, wired to fakes."""
 
-    def __init__(self, files: dict[Path, str] | None = None) -> None:
+    def __init__(
+        self,
+        files: dict[Path, str] | None = None,
+        registry: NoveltyRegistry | None = None,
+    ) -> None:
         clock = FrozenClock(datetime(2026, 9, 20, 12, 0, 0))
+        fingerprinter = AnalysisFingerprinter()
         self.console = InMemoryConsole()
         self.file_system = InMemoryFileSystem(files)
         self.runner = RecordingEvolutionRunner(
@@ -43,8 +50,18 @@ class Harness:
             file_system=self.file_system,
             program_loader=ExecProgramLoader(),
             baseline_map=BuiltinKaprekarMap(),
+            baseline_program=BaselineProgram(),
             analyzer=MemoizedMapAnalyzer(clock=clock, settings=AnalysisSettings()),
-            scoring_policy=WeightedScoringPolicy(weights=ScoreWeights()),
+            scoring_policy=WeightedScoringPolicy(
+                weights=ScoreWeights(),
+                # Empty by default: these tests measure shape, not prior art.
+                registry=registry or NoveltyRegistry(),
+                fingerprinter=fingerprinter,
+            ),
+            shape_analyzer=AstShapeAnalyzer(),
+            fingerprinter=fingerprinter,
+            cataloguer=FormulaCataloguer(),
+            catalogue_settings=CatalogueSettings(),
             evaluation_projector=DefaultEvaluationProjector(),
             report_formatter=TextReportFormatter(),
             evolution_runner=self.runner,
@@ -58,12 +75,20 @@ class Harness:
         )
 
 
-def test_scoring_a_candidate_file_matches_the_builtin_baseline() -> None:
+def test_scoring_a_candidate_file_matches_the_baseline() -> None:
+    """The yardstick must be measured exactly like the things measured against it.
+
+    Now that the score reads the source as well as the convergence, a baseline scored
+    some other way would drift from `kaprekarevolve score` - the one divergence the
+    architecture exists to prevent.
+    """
     harness = Harness({CANDIDATE: KAPREKAR_SOURCE})
 
     card = harness.engine.score_path(CANDIDATE)
+    harness.engine.show_baseline()
 
-    assert card.combined_score == pytest.approx(0.292728, abs=1e-6)
+    assert card.combined_score == pytest.approx(0.394438, abs=1e-6)
+    assert f"{card.combined_score:.6f}" in harness.console.text
 
 
 def test_the_cascade_stages_agree_on_a_sound_candidate() -> None:
@@ -103,7 +128,7 @@ def test_show_baseline_reports_6174() -> None:
     harness.engine.show_baseline()
 
     assert "6174" in harness.console.text
-    assert "0.292728" in harness.console.text
+    assert "0.394438" in harness.console.text
 
 
 def test_show_trace_walks_the_baseline() -> None:

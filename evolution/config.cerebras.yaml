@@ -9,7 +9,9 @@ max_iterations: 200
 checkpoint_interval: 10
 random_seed: 42
 language: "python"
-diff_based_evolution: true
+# The named untried lever: with diffs the model is told "do not rewrite the entire
+# program", which kept every run decorating its seed instead of replacing it.
+diff_based_evolution: false
 max_code_length: 8000
 
 llm:
@@ -39,17 +41,22 @@ database:
   population_size: 200
   num_islands: 4
   migration_interval: 20
-  # Raw values from the evaluator; OpenEvolve bins them itself.
+  # Bounded 0..1 and emitted on EVERY path, including rejections. Unbounded counts such
+  # as attractor_count broke both ways: one `return value` sets the running max to 10000
+  # and squashes every later candidate into bin 0, and a rejected program lacks the key
+  # entirely, which made OpenEvolve throw away its rejection artifact before storing it.
   feature_dimensions:
-    - "attractor_count"
-    - "mean_depth"
-    - "complexity"
-  feature_bins: 10
+    - "image_ratio"
+    - "elegance"
+    - "depth_ratio"
+  feature_bins: 6
 
 evaluator:
   timeout: 120
   cascade_evaluation: true
-  cascade_thresholds: [0.5]
+  # Must sit BELOW _SCREEN_PASS_SCORE in default_engine.py (0.0001) so a candidate that
+  # passes the contract check reaches stage 2, and above 0 so a failed one does not.
+  cascade_thresholds: [0.00005]
   enable_artifacts: true      # rejection messages go straight back to the LLM
   parallel_evaluations: 4
 
@@ -73,34 +80,56 @@ prompt:
       state, no IO, no clock, no external input.
     - It must be total on 0..9999 and never raise.
     - It must return an `int` in 0..9999. Never a string, float or bool.
-    - No value may need more than 1000 iterations to settle. A map that slow is not
-      interesting, and it is rejected outright.
+    - No value may need more than 1000 iterations to settle.
 
     # HOW YOU ARE SCORED
-    combined_score = dominance^1.5 x parsimony x cycle_quality x depth_score
+    combined_score = dominance^1.5 x attractor_focus x cycle_quality
+                     x depth_score x elegance x novelty
 
-    - dominance     - the share of all 10000 numbers that land in the largest attractor.
-                      Maximise it: one basin should swallow nearly everything.
-    - parsimony     - falls off with the number of distinct attractors. Aim for one.
-    - cycle_quality - a fixed point (cycle of length 1) beats a long terminal cycle.
-    - depth_score   - rises with the MEAN number of steps a value needs to settle, and
-                      saturates around 11 steps. THIS IS THE ANTI-TRIVIALITY TERM.
-                      Depth is where the headroom is: a map that settles in 5 steps
-                      scores about half what an otherwise identical map settling in
-                      10 steps does. Lengthen the transient paths.
+    Six factors, each in 0..1, MULTIPLIED. One weak factor decides the whole score, so
+    a map that is excellent on five and poor on one is a poor map.
 
-    # KNOWN DEAD ENDS - do not propose these, they all score 0.0
-    - `return 6174` or any constant: one attractor, mean depth 1, depth_score 0.
-    - `return value`, the identity: 10000 attractors, mean depth 0.
-    - Anything that collapses the domain in a single step. The map must have DEPTH:
-      a genuine cascade of intermediate values, not an immediate jump to the answer.
+    - dominance       - share of the 10000 numbers landing in the largest attractor.
+                        Maximise it: one basin should swallow nearly everything.
+    - attractor_focus - falls off with the number of distinct attractors. Aim for one.
+    - cycle_quality   - a fixed point beats a long terminal cycle.
+    - depth_score     - a BAND, not a ramp. It PEAKS at mean depth 5 - where Kaprekar's
+                        own routine sits - and falls away on BOTH sides. Mean depth 9
+                        scores WORSE than mean depth 5, not better. A deepest path over
+                        12 steps is penalised again on top.
+                        DO NOT lengthen transients to farm depth. That tactic was
+                        rewarded by an earlier version of this score and it produced
+                        unreadable maps; it now costs you the run.
+    - elegance        - falls with the size of transform()'s syntax tree. A branch costs
+                        6 nodes, an unexplained integer constant 8, and each element of
+                        a list or dict literal 8. One line of arithmetic beats a chain
+                        of special cases that reaches the same place.
+    - novelty         - near zero if your map's STRUCTURE is already catalogued. The
+                        structure is the in-degree profile of the map, normalised, so
+                        it sees straight through:
+                          * composing a known map with a digit permutation;
+                          * adding a constant to a known map;
+                          * parity tweaks and rotation chains bolted onto one.
+                        All of those are the same map wearing different values. A
+                        SHORTER route to a catalogued structure keeps partial credit;
+                        a longer one earns almost nothing.
+
+    # KNOWN DEAD ENDS - these all score near 0
+    - `return 6174` or any constant; `return value`, the identity.
+    - The Kaprekar difference (descending digits minus ascending) and ANYTHING built by
+      decorating it: rotations, parity tweaks, digit-sum-driven scrambles, banded
+      special cases. Its structure and every relabelling of it are catalogued.
+    - Linear combinations `(a*P(v) + b*Q(v) + c) % 10000` where P and Q are digit
+      permutations. All 2400 of them have been enumerated; they reach only 7 distinct
+      structures and every one is already recorded.
 
     # WHERE TO LOOK
-    Kaprekar's routine is one point in a large space. Other structures worth trying:
-    - other combinations of the sorted digits (weighted differences, rotations,
-      alternating signs, base changes with the result folded back into 0..9999);
-    - digit-position permutations composed with arithmetic;
-    - digit-power sums, digital roots, reversals (mind the leading zeros);
-    - combinations of the above, chosen by a property of the number.
-    Keep the code short and readable, and keep the wraparound into 0..9999 explicit
-    (`% 10000` or `abs(...)`), never accidental.
+    Go outside the sorted-digit-difference family, which is exhausted. Structures that
+    are NOT in the catalogue:
+    - COMPOSING permutations rather than adding them: `desc(v) - rot(asc(v))` is not a
+      linear combination and is not catalogued.
+    - digit power sums, digital roots, and other maps that discard digit order;
+    - modular arithmetic on the value itself, position-weighted digit sums, base
+      changes folded back into 0..9999;
+    - a map built from a single arithmetic identity rather than a case analysis.
+    Keep the code short and the wraparound explicit (`% 10000`), never accidental.

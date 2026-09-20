@@ -148,3 +148,13 @@ only confirm it is maximal. Raising `depth_span` would re-separate that group.
 ```bash
 uv run kaprekarevolve score found-solutions/kaprekar-2802-banded-scramble.py
 ```
+
+## Re-measured under the rebuilt score (six factors)
+
+`combined_score` **0.000283**, down from the number above. The earlier rows are kept
+deliberately: scores measured under different weights are not comparable, and this one
+was found under an objective that has since been rebuilt.
+
+It falls because its structure is Kaprekar's own (post-composed with a permutation) and its AST cost is 379. Both are penalties the earlier objective had no way to express —
+it measured only the shape of the convergence, so a map that reached a known place by a
+longer road looked like a discovery. See **The catalogue** in README.md.

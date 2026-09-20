@@ -34,7 +34,7 @@ class MemoizedMapAnalyzer:
     def analyze(self, digit_map: DigitMap) -> AnalysisOutcome:
         started = self._clock.elapsed_seconds()
         try:
-            outputs = self._tabulate(digit_map)
+            outputs = self._tabulate(digit_map, started)
             self._reject_if_non_deterministic(digit_map, outputs)
             self._reject_if_out_of_time(started)
             analysis = self._explore(outputs)
@@ -87,9 +87,21 @@ class MemoizedMapAnalyzer:
             seed=seed, values=tuple(values), cycle=(), steps_to_cycle=len(values)
         )
 
-    def _tabulate(self, digit_map: DigitMap) -> list[int]:
-        """Evaluate the map once on every value, validating the contract as we go."""
-        return [self._apply(digit_map, value) for value in range(self._settings.domain_size)]
+    def _tabulate(self, digit_map: DigitMap, started: float) -> list[int]:
+        """Evaluate the map once on every value, validating the contract as we go.
+
+        The clock is checked as we go, not merely afterwards: a candidate whose every
+        call is slow would otherwise run past the whole time budget here and be killed
+        by OpenEvolve's evaluator timeout instead - the one path that records a
+        cascade stage-1 pass as the final score.
+        """
+        stride = self._settings.time_check_stride
+        outputs: list[int] = []
+        for value in range(self._settings.domain_size):
+            if value % stride == 0:
+                self._reject_if_out_of_time(started)
+            outputs.append(self._apply(digit_map, value))
+        return outputs
 
     def _apply(self, digit_map: DigitMap, value: int) -> int:
         try:
@@ -208,6 +220,13 @@ class MemoizedMapAnalyzer:
         )
         dominant = attractors[0]
         image_size = len(set(outputs))
+        # Both histograms are graph invariants: two maps that are the same map
+        # relabelled share them exactly. Together they are the novelty fingerprint.
+        # Values that are never an output have in-degree 0 and so are absent from
+        # the Counter; they are a real part of the graph's shape, so count them back in.
+        indegrees = Counter(outputs)
+        indegree_counts = Counter(indegrees.values())
+        indegree_counts[0] = domain_size - len(indegrees)
         return MapAnalysis(
             domain_size=domain_size,
             attractors=attractors,
@@ -220,6 +239,8 @@ class MemoizedMapAnalyzer:
             image_size=image_size,
             image_ratio=image_size / domain_size,
             fixed_point_count=sum(1 for value, image in enumerate(outputs) if value == image),
+            depth_histogram=tuple(sorted(Counter(depth).items())),
+            indegree_histogram=tuple(sorted(indegree_counts.items())),
         )
 
     def _reject_if_too_long(self, steps: int, seed: int) -> None:

@@ -2,6 +2,7 @@ from kaprekarevolve.interfaces.kaprekar.analysis_failure import AnalysisFailure
 from kaprekarevolve.interfaces.kaprekar.analysis_outcome import AnalysisOutcome
 from kaprekarevolve.interfaces.kaprekar.analysis_settings import AnalysisSettings
 from kaprekarevolve.interfaces.kaprekar.attractor import Attractor
+from kaprekarevolve.interfaces.kaprekar.baseline_program import BaselineProgram
 from kaprekarevolve.interfaces.kaprekar.failure_reason import FailureReason
 from kaprekarevolve.interfaces.kaprekar.map_analysis import MapAnalysis
 from kaprekarevolve.interfaces.kaprekar.map_analyzer import MapAnalyzer
@@ -13,6 +14,7 @@ __all__ = [
     "AnalysisOutcome",
     "AnalysisSettings",
     "Attractor",
+    "BaselineProgram",
     "FailureReason",
     "MapAnalysis",
     "MapAnalyzer",

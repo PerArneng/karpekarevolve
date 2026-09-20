@@ -22,6 +22,7 @@ uv run kaprekarevolve score <program.py>  # score a candidate file
 uv run kaprekarevolve evolve -n 200       # run OpenEvolve (spends LLM budget)
 uv run kaprekarevolve evolve -b cerebras  # ... on a named LLM backend
 uv run kaprekarevolve evolve -s reverse_add  # ... from a named seed program
+uv run kaprekarevolve catalogue           # enumerate what brute force already reaches
 uv run kaprekarevolve best                # re-score the last run's winner
 
 uv run pytest
@@ -57,36 +58,61 @@ launch one without the user asking.
 
 Maps worth keeping go in `found-solutions/<name>.md` with the program beside it, since
 `openevolve_output/` is gitignored and overwritten by the next run. Record which
-`depth_span` a score was measured under — scores across different weights are not
-comparable.
+`depth_peak`, `depth_width` and `elegance_reference` a score was measured under — scores
+across different weights are not comparable.
 
 ## The scoring contract
 
 Every total map on a finite domain converges, so "does it converge?" measures nothing.
-The evaluator grades the *shape* of the convergence instead — a product of four
-factors, each in 0..1, in `modules/scoring/weighted_scoring_policy.py`:
+The evaluator grades the *shape* of the convergence, and of the code that produced it —
+a product of six factors, each in 0..1, in `modules/scoring/weighted_scoring_policy.py`:
 
 ```
-combined_score = dominance^1.5 · parsimony · cycle_quality · depth_score
+combined_score = dominance^1.5 · attractor_focus · cycle_quality
+                 · depth_score · elegance · novelty
 ```
 
-`depth_score` (mean steps to settle, saturating at mean depth 6) is the anti-triviality
-term. Without it the search collapses onto `return 6174` and `return value`, which both
-score exactly 0.0 today. If you ever find the search producing degenerate winners, that
-term is the first place to look.
+`depth_score` is a **band**, not a ramp: it peaks at mean depth 5 (Kaprekar's own is
+4.66), falls away on both sides, and is damped again by a `max_depth` over 12. It used
+to be a ramp saturating at a cap, which paid for depth without limit — and the search
+answered exactly as asked, bolting rotation chains onto the Kaprekar difference purely
+to lengthen paths. **If you make it a ramp again you will get that behaviour back.**
+
+It is still the anti-triviality term, and the low end is guarded by a smooth onset gate
+(`depth_onset`, `depth_onset_width`) rather than a cutoff. A bare Gaussian hands a map
+that settles in 1.05 steps a score of 0.18; the gate takes that to 0.0004. `return 6174`
+and `return value` both score exactly 0.0.
+
+`elegance` measures the AST of `transform` (docstring stripped): a branch costs 6 nodes,
+an unexplained integer constant 8, and each element of a list/dict literal 8. It is
+strictly decreasing with **no flat top** — a factor that saturates stops ranking whatever
+reaches it, which is how 22% of all evaluations once tied at exactly 1.0000.
+
+`novelty` compares the map's gcd-normalised in-degree profile against
+`found-solutions/registry.json` and discounts prior art by how much longer the code is
+than the cheapest known route to the same structure. See **The catalogue** in README.md.
 
 Output diversity is deliberately **not** scored: the real Kaprekar map emits only 55
 distinct values out of 10000, so rewarding a wide image would punish the thing being
 imitated. `image_ratio` is exported as a MAP-Elites feature instead.
 
-**The baseline scores `0.292728`, and that number is pinned in four files** —
-`tests/unit/test_weighted_scoring_policy.py`, `tests/integration/test_engine.py`,
-`tests/integration/test_cli.py`, and the README's comparison table. Tuning
-Note `tests/unit/test_weighted_scoring_policy.py` also pins a `depth_score` value
-(currently `0.4499`) that moves with `depth_span` but is not the baseline. Tuning
-`ScoreWeights` (e.g. raising `depth_span` so a 200-iteration run keeps discriminating
-past the current 1.0 ceiling) is a reasonable thing to want, but update all four or the
-suite goes red for the wrong reason.
+**The baseline scores `0.019311`** through the CLI, which loads the committed registry
+and so scores Kaprekar as the prior art it is. Pinned in:
+
+- `tests/integration/test_cli.py` — `0.019311`, the full CLI path with the real registry;
+- `tests/integration/test_engine.py` — `0.394438`, the same map with an **empty**
+  registry, which is what the in-memory harness injects;
+- `tests/unit/test_weighted_scoring_policy.py` — `0.788877`, shape only, no source and
+  no registry.
+
+Three different numbers for the same map, because they differ in what is injected. That
+is the point of the harnesses, but it means changing `ScoreWeights` moves all three.
+`README.md` carries the CLI number in two places.
+
+`baseline` is scored from `BaselineProgram.source`, not from `BuiltinKaprekarMap`, so
+that `kaprekarevolve baseline` and `kaprekarevolve score evolution/seeds/kaprekar.py`
+report the same number. Score the object instead and the two drift the moment the score
+reads source, which it now does.
 
 Analysis is exact rather than sampled: the domain under a total map is a functional
 graph, so `MemoizedMapAnalyzer` labels each value once across all 10000 seeds — O(domain),
@@ -153,6 +179,19 @@ through fakes plus a CLI smoke test. No test should touch the real filesystem.
   both will happily report stale data mid-run. `best/` is only written when a run
   finishes. Copy the directory aside before a re-run (`openevolve_output.*/` is
   gitignored) and don't trust either tool until the run completes.
+- **The stage-1 sentinel and `cascade_thresholds` are a matched pair.**
+  `_SCREEN_PASS_SCORE` in `modules/engine/default_engine.py` (0.0001) must sit *above*
+  `cascade_thresholds[0]` in every `evolution/config.*.yaml` (0.00005) so a candidate
+  that passes the contract check reaches stage 2, and *below* any score a real map can
+  earn. OpenEvolve keeps stage 1's metrics when stage 2 times out, so when this sentinel
+  was 1.0 a hung candidate recorded a perfect score — above the best map ever found.
+- **Every metric named in `feature_dimensions` must be emitted on every path.**
+  OpenEvolve computes MAP-Elites coordinates inside `database.add()` and raises when one
+  is missing; the call that stores artifacts is the next statement, so it never runs.
+  That silently cost all 173 rejections their explanation across every run on record —
+  21264 checkpointed programs, zero artifacts. `REJECTED_FEATURES` in
+  `modules/scoring/default_evaluation_projector.py` is what keeps this true, and
+  `tests/unit/test_default_evaluation_projector.py` guards it.
 - **The seed is not the lever on diversity.** A 200-iteration run from `kaprekar` ended
   with all 201 programs still containing the descending-minus-ascending step, and
   seeding `reverse_add` instead did not help: within ~12 iterations it discarded
