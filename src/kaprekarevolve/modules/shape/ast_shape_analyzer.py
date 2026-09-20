@@ -31,14 +31,19 @@ class AstShapeAnalyzer:
       counting the arithmetic it takes, which is what ``node_count`` already does.
     * ``[1, 2, 3, ...][value % 20]`` - a lookup table, cheap per element. Charged per
       element instead.
+    * ``transform = lambda v: ...`` - a binding rather than a ``def``. An earlier version
+      looked only for a ``FunctionDef``, raised, and was handed the neutral score meant
+      for the built-in map, which has no source at all. 30 of 201 programs in a single
+      200-iteration run found that free pass. Every binding form is measured now, and
+      anything unrecognised falls back to measuring the whole module, so there is no
+      shape of source that escapes being counted.
 
     Format specifiers (the ``04d`` in ``f"{value:04d}"``), booleans and the empty string
     are structural punctuation, not answers, so they are free.
     """
 
     def analyze(self, source: str) -> CodeShape:
-        function = self._transform_function(source)
-        body = self._without_docstring(function)
+        body = self._measured_statements(source)
         nodes = [node for statement in body for node in ast.walk(statement)]
         spec_constants = self._format_spec_constants(body)
 
@@ -66,16 +71,34 @@ class AstShapeAnalyzer:
             ),
         )
 
-    @staticmethod
-    def _transform_function(source: str) -> ast.FunctionDef:
-        for node in ast.walk(ast.parse(source)):
+    @classmethod
+    def _measured_statements(cls, source: str) -> list[ast.stmt]:
+        """Return the statements that make up ``transform``, however it is bound.
+
+        Falling back to the whole module matters: the alternative is to raise, and a
+        raise upstream became a perfect elegance score rather than a bad one.
+        """
+        module = ast.parse(source)
+        for node in ast.walk(module):
             if isinstance(node, ast.FunctionDef) and node.name == "transform":
-                return node
-        raise ValueError("source defines no transform function")
+                return cls._without_docstring(node.body)
+            if isinstance(node, ast.Assign | ast.AnnAssign) and cls._binds_transform(node):
+                value = node.value
+                if isinstance(value, ast.Lambda):
+                    return [ast.Expr(value=value.body)]
+                if value is not None:
+                    return [ast.Expr(value=value)]
+        # Nothing recognisable: measure everything except the module docstring, which
+        # is the honest upper bound rather than a free pass.
+        return cls._without_docstring(module.body)
 
     @staticmethod
-    def _without_docstring(function: ast.FunctionDef) -> list[ast.stmt]:
-        body = function.body
+    def _binds_transform(node: ast.Assign | ast.AnnAssign) -> bool:
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        return any(isinstance(t, ast.Name) and t.id == "transform" for t in targets)
+
+    @staticmethod
+    def _without_docstring(body: list[ast.stmt]) -> list[ast.stmt]:
         if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
             return body[1:]
         return body

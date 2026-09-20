@@ -192,6 +192,14 @@ through fakes plus a CLI smoke test. No test should touch the real filesystem.
   21264 checkpointed programs, zero artifacts. `REJECTED_FEATURES` in
   `modules/scoring/default_evaluation_projector.py` is what keeps this true, and
   `tests/unit/test_default_evaluation_projector.py` guards it.
+- **A raise inside the elegance measure became a perfect elegance score.**
+  `AstShapeAnalyzer` looked only for a `FunctionDef` named `transform`; a candidate
+  writing `transform = lambda v: ...` made it raise, and the raise was caught upstream
+  as "this map has no source" - the neutral meant for `BuiltinKaprekarMap`, which really
+  has none. 30 of 201 programs in one 200-iteration run found that free pass. The
+  analyzer is total now and must stay that way: anything it cannot recognise falls back
+  to measuring the whole module. Whenever a scoring term can fail, make sure failing is
+  a *bad* score and never a neutral one.
 - **The seed is not the lever on diversity.** A 200-iteration run from `kaprekar` ended
   with all 201 programs still containing the descending-minus-ascending step, and
   seeding `reverse_add` instead did not help: within ~12 iterations it discarded
