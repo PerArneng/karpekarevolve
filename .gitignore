@@ -219,4 +219,6 @@ __marimo__/
 
 # OpenEvolve run output
 openevolve_output/
+# timestamped copies made before a re-run
+openevolve_output.*/
 openevolve_checkpoints/

@@ -133,6 +133,34 @@ def test_evolve_passes_the_iteration_override_through() -> None:
     assert "best combined_score     0.900000" in harness.console.text
 
 
+def test_evolve_defaults_to_the_brain_tailscale_backend() -> None:
+    harness = Harness()
+
+    harness.engine.evolve(None)
+
+    assert harness.runner.calls[0].config_path == Path(
+        "evolution/config.brain-tailscale.yaml"
+    )
+
+
+def test_evolve_selects_the_named_backend_config() -> None:
+    harness = Harness()
+
+    harness.engine.evolve(None, "cerebras")
+
+    assert harness.runner.calls[0].config_path == Path("evolution/config.cerebras.yaml")
+
+
+def test_evolve_backend_and_iterations_compose() -> None:
+    harness = Harness()
+
+    harness.engine.evolve(7, "cerebras")
+
+    call = harness.runner.calls[0]
+    assert call.iterations == 7
+    assert call.config_path == Path("evolution/config.cerebras.yaml")
+
+
 def test_evolve_without_an_override_keeps_the_configured_iterations() -> None:
     harness = Harness()
 

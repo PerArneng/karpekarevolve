@@ -128,16 +128,26 @@ class DefaultEngine:
             self._console.write(f"iteration               {info.get('iteration_found', '?')}")
         self._console.write("\n" + source)
 
-    def evolve(self, iterations: int | None) -> None:
+    def evolve(self, iterations: int | None, backend: str | None = None) -> None:
         settings = self._evolution_settings
         if iterations is not None:
             settings = settings.model_copy(update={"iterations": iterations})
+        if backend is not None:
+            settings = settings.model_copy(
+                update={"config_path": self._backend_config_path(backend)}
+            )
         self._logger.info(
             f"evolving for {settings.iterations} iterations "
-            f"from {settings.initial_program_path}"
+            f"from {settings.initial_program_path} "
+            f"using {settings.config_path}"
         )
         result = self._evolution_runner.run(settings)
         self._console.write(self._report_formatter.format_evolution_result(result))
+
+    @staticmethod
+    def _backend_config_path(backend: str) -> Path:
+        """Map a backend name onto its OpenEvolve config file."""
+        return Path("evolution") / f"config.{backend}.yaml"
 
     def _score_map(self, digit_map: DigitMap) -> ScoreCard:
         return self._scoring_policy.score(self._analyzer.analyze(digit_map))

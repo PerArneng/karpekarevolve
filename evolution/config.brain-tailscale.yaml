@@ -1,0 +1,109 @@
+# OpenEvolve configuration for kaprekarevolve - backend: brain-tailscale.
+#
+# Select with: uv run kaprekarevolve evolve --backend brain-tailscale
+#
+# Backend: a self-hosted vLLM endpoint (qwen3.6-35b) on your own network. Its
+# router dispatches on `Host`, which OpenEvolve cannot set, so a small local proxy
+# supplies that header. Configure the endpoint in `.env` (see `.env.example`) and
+# start the proxy first:
+#
+#   cp .env.example .env   # then fill in your hosts
+#   python3 scripts/vllm_host_proxy.py &
+#
+# To go back to the Claude Code CLI: provider "claude_code", drop api_base/api_key,
+# and restore the sonnet/haiku models below.
+
+max_iterations: 200
+# Snapshots the whole population; both visualizers read these, not the live run.
+# Defaults to 100, which leaves a short run with nothing to inspect.
+checkpoint_interval: 10
+random_seed: 42
+language: "python"
+diff_based_evolution: true
+max_code_length: 8000
+
+llm:
+  provider: "openai"
+  # Points at the local proxy, which adds the `Host` header the router needs.
+  # Keep the port in step with VLLM_PROXY_PORT in `.env`.
+  api_base: "http://127.0.0.1:8082/v1"
+  api_key: "dummy"          # ignored by the endpoint, but the SDK demands one
+  temperature: 0.8
+  # qwen3.6-35b is a reasoning model: it fills `reasoning` before `content`, and a
+  # tight budget gets spent entirely on thinking, returning finish_reason=length
+  # with empty content. Leave real headroom - 1024 was not enough in testing.
+  max_tokens: 24000
+  # A 35B reasoning model is slow; the stock 60s timeout aborts mid-thought.
+  timeout: 900
+  retries: 3
+  retry_delay: 10
+  models:
+    - name: "qwen3.6-35b"
+      weight: 1.0
+
+database:
+  population_size: 200
+  num_islands: 4
+  migration_interval: 20
+  # Raw values from the evaluator; OpenEvolve bins them itself.
+  feature_dimensions:
+    - "attractor_count"
+    - "mean_depth"
+    - "complexity"
+  feature_bins: 10
+
+evaluator:
+  timeout: 120
+  cascade_evaluation: true
+  cascade_thresholds: [0.5]
+  enable_artifacts: true      # rejection messages go straight back to the LLM
+  parallel_evaluations: 4
+
+prompt:
+  num_top_programs: 3
+  num_diverse_programs: 2
+  include_artifacts: true
+  system_message: |
+    You are a mathematician hunting for new Kaprekar-like maps on the four-digit
+    numbers.
+
+    # THE OBJECT
+    `transform(value)` maps an int in 0..9999 to an int in 0..9999. Read the input as
+    its zero-padded four-digit form: 49 is "0049", 7 is "0007". Iterating the map from
+    any starting number must funnel the whole domain into one small attractor, the way
+    Kaprekar's routine funnels 9990 of the 10000 starting numbers into the fixed point
+    6174 within seven steps.
+
+    # HARD CONSTRAINTS - a violation scores exactly 0
+    - `transform` must be pure and deterministic: no randomness, no global mutable
+      state, no IO, no clock, no external input.
+    - It must be total on 0..9999 and never raise.
+    - It must return an `int` in 0..9999. Never a string, float or bool.
+    - No value may need more than 1000 iterations to settle. A map that slow is not
+      interesting, and it is rejected outright.
+
+    # HOW YOU ARE SCORED
+    combined_score = dominance^1.5 x parsimony x cycle_quality x depth_score
+
+    - dominance     - the share of all 10000 numbers that land in the largest attractor.
+                      Maximise it: one basin should swallow nearly everything.
+    - parsimony     - falls off with the number of distinct attractors. Aim for one.
+    - cycle_quality - a fixed point (cycle of length 1) beats a long terminal cycle.
+    - depth_score   - rises with the MEAN number of steps a value needs to settle, and
+                      saturates around 6 steps. THIS IS THE ANTI-TRIVIALITY TERM.
+
+    # KNOWN DEAD ENDS - do not propose these, they all score 0.0
+    - `return 6174` or any constant: one attractor, mean depth 1, depth_score 0.
+    - `return value`, the identity: 10000 attractors, mean depth 0.
+    - Anything that collapses the domain in a single step. The map must have DEPTH:
+      a genuine cascade of intermediate values, not an immediate jump to the answer.
+
+    # WHERE TO LOOK
+    Kaprekar's routine is one point in a large space. Other structures worth trying:
+    - other combinations of the sorted digits (weighted differences, rotations,
+      alternating signs, base changes with the result folded back into 0..9999);
+    - digit-position permutations composed with arithmetic;
+    - digit-power sums, digital roots, reversals (mind the leading zeros);
+    - combinations of the above, chosen by a property of the number.
+    Keep the code short and readable, and keep the wraparound into 0..9999 explicit
+    (`% 10000` or `abs(...)`), never accidental.

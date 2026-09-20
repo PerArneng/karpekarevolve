@@ -71,12 +71,25 @@ uv run kaprekarevolve baseline              # analyse and score Kaprekar's routi
 uv run kaprekarevolve trace 9831            # walk one number to its attractor
 uv run kaprekarevolve score <program.py>    # score a candidate
 uv run kaprekarevolve evolve -n 200         # search for new maps
+uv run kaprekarevolve evolve -b cerebras    # ... on a different LLM backend
 uv run kaprekarevolve best                  # re-score the winner of the last run
 ```
 
-`evolve` uses the **Claude Code CLI** as its LLM backend, so it needs no API key — just
-an authenticated `claude` session (`claude login`). The backend is configured in
-`evolution/config.yaml`.
+### LLM backends
+
+`evolve` picks its LLM from a per-backend config file, chosen with `--backend`/`-b`:
+
+| Backend | Config | What it needs |
+|---|---|---|
+| `brain-tailscale` (default) | `evolution/config.brain-tailscale.yaml` | a self-hosted `qwen3.6-35b` on your own network. Its router dispatches on `Host`, which OpenEvolve cannot set, so copy `.env.example` to `.env`, fill in your endpoint, and start `python3 scripts/vllm_host_proxy.py &` first. |
+| `cerebras` | `evolution/config.cerebras.yaml` | hosted Cerebras (`gpt-oss-120b`, `qwen-3.8-27b`). Needs `CEREBRAS_API_KEY` in the environment or `.env`; the key is read from there and never stored in the repo. |
+
+Adding a backend means dropping `evolution/config.<name>.yaml` next to the others — the
+name on the command line *is* the filename, so no code change is needed.
+
+The two files share everything but their `llm:` block. That duplication is deliberate
+(OpenEvolve has no config includes) but it does mean a prompt or database change must be
+applied to **both**, or the backends quietly stop being comparable.
 
 ## Layout
 
@@ -95,7 +108,10 @@ src/kaprekarevolve/
 evolution/
   initial_program.py   seed program, inside EVOLVE-BLOCK markers
   evaluator.py         OpenEvolve adapter -> the same Engine the CLI calls
-  config.yaml          OpenEvolve + Claude Code configuration
+  config.<backend>.yaml  one OpenEvolve config per LLM backend
+scripts/
+  vllm_host_proxy.py   adds the Host header a vhost-dispatching router needs
+.env.example           endpoint + key template; copy to .env (gitignored)
 ```
 
 `evolution/evaluator.py` is a frontend adapter exactly like the CLI: it parses a path

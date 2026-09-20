@@ -10,6 +10,6 @@ class EvolutionSettings(BaseModel):
 
     initial_program_path: Path = Path("evolution/initial_program.py")
     evaluator_path: Path = Path("evolution/evaluator.py")
-    config_path: Path = Path("evolution/config.yaml")
+    config_path: Path = Path("evolution/config.brain-tailscale.yaml")
     output_dir: Path = Path("openevolve_output")
     iterations: int = 200

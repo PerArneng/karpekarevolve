@@ -1,26 +1,39 @@
-# OpenEvolve configuration for kaprekarevolve.
+# OpenEvolve configuration for kaprekarevolve - backend: cerebras.
 #
-# Backend: the Claude Code CLI - no API key, it uses the authenticated `claude`
-# session. Run `claude login` once if you have not already.
-
+# Hosted Cerebras inference. Needs CEREBRAS_API_KEY in the environment.
+# Select with: uv run kaprekarevolve evolve --backend cerebras
+#
 max_iterations: 200
+# Snapshots the whole population; both visualizers read these, not the live run.
+# Defaults to 100, which leaves a short run with nothing to inspect.
+checkpoint_interval: 10
 random_seed: 42
 language: "python"
 diff_based_evolution: true
 max_code_length: 8000
 
 llm:
-  provider: "claude_code"
+  provider: "openai"
+  api_base: "https://api.cerebras.ai/v1"
+  # Resolved from the environment by OpenEvolve; never hardcode the key here.
+  #   export CEREBRAS_API_KEY=...
+  api_key: "${CEREBRAS_API_KEY}"
   temperature: 0.8
+  # Room for reasoning tokens plus a full SEARCH/REPLACE diff.
+  max_tokens: 16000
+  # Cerebras is fast; the stock 60s is enough, but retries matter more on a
+  # shared hosted endpoint than on the homelab box.
+  timeout: 180
+  retries: 5
+  retry_delay: 10
   models:
-    - name: "sonnet"
-      weight: 0.8
-      max_tokens: 16000
-      max_budget_usd: 1.0
-    - name: "haiku"
-      weight: 0.2
-      max_tokens: 8000
-      max_budget_usd: 0.25
+    # Cerebras' other model, qwen-3.8-27b, is deliberately NOT used here: it spends
+    # its entire budget on reasoning tokens and returns empty content (verified up to
+    # 64000 max_tokens, where it caps at 40960 reasoning tokens and still emits
+    # nothing). Cerebras also rejects `chat_template_kwargs`, so thinking cannot be
+    # turned off. OpenEvolve reports this as "LLM returned None response".
+    - name: "gpt-oss-120b"
+      weight: 1.0
 
 database:
   population_size: 200
