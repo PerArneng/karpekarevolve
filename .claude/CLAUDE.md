@@ -20,6 +20,8 @@ uv run kaprekarevolve baseline            # score the built-in Kaprekar routine
 uv run kaprekarevolve trace 9831          # walk one number to its attractor
 uv run kaprekarevolve score <program.py>  # score a candidate file
 uv run kaprekarevolve evolve -n 200       # run OpenEvolve (spends LLM budget)
+uv run kaprekarevolve evolve -b cerebras  # ... on a named LLM backend
+uv run kaprekarevolve evolve -s reverse_add  # ... from a named seed program
 uv run kaprekarevolve best                # re-score the last run's winner
 
 uv run pytest
@@ -27,9 +29,36 @@ uv run mypy src tests evolution           # strict; must stay clean
 uv run ruff check src tests evolution
 ```
 
-`evolve` uses the **Claude Code CLI** as its LLM backend (`provider: claude_code` in
-`evolution/config.yaml`), so it needs no API key — just an authenticated `claude`
-session. It costs real money; don't launch one without the user asking.
+## Backends and seeds
+
+Two things are chosen per run, each by name, each resolving to a file — so adding
+either is a new file, never a code change.
+
+`--backend NAME` → `evolution/config.<name>.yaml`:
+
+- **`brain-tailscale`** (the default) — a self-hosted `qwen3.6-35b`. Its router
+  dispatches on `Host`, which OpenEvolve cannot set because it builds its OpenAI
+  client from a bare `api_base` string, so **`python3 scripts/vllm_host_proxy.py &`
+  must be running first**. Endpoints come from `.env` (see `.env.example`); no private
+  hostname is committed.
+- **`cerebras`** — hosted `gpt-oss-120b`, needs `CEREBRAS_API_KEY` in `.env`. Its other
+  model, `qwen-3.8-27b`, is deliberately excluded: it spends its whole budget on
+  reasoning tokens and returns empty content (verified to 64000 `max_tokens`), and
+  Cerebras rejects `chat_template_kwargs` so thinking cannot be disabled. OpenEvolve
+  reports this as `LLM returned None response`. Don't re-add it.
+
+`--seed NAME` → `evolution/seeds/<name>.py`. `kaprekar` is the default; `reverse_add`,
+`digit_power_sum` and `digit_pair_gap` start from other families. OpenEvolve cannot
+take several at once — passing a list to `run_evolution` concatenates them into one
+file — so it is one family per run.
+
+A run spends real budget (money on Cerebras, hours on brain at ~35s/iteration); don't
+launch one without the user asking.
+
+Maps worth keeping go in `found-solutions/<name>.md` with the program beside it, since
+`openevolve_output/` is gitignored and overwritten by the next run. Record which
+`depth_span` a score was measured under — scores across different weights are not
+comparable.
 
 ## The scoring contract
 
@@ -117,3 +146,25 @@ through fakes plus a CLI smoke test. No test should touch the real filesystem.
   inspect.
 - For anything about inspecting or plotting a run, use the **`openevolve-viz` skill** in
   `.claude/skills/` rather than hand-rolling checkpoint parsing.
+- **`openevolve_output/` is not cleared between runs.** Checkpoints are overwritten in
+  place, so a shorter run leaves the previous run's higher-numbered checkpoints behind,
+  and directory mtimes still show the *old* times. `summarize_run.py` reads the
+  highest-numbered checkpoint and the visualizer reads the most recently modified, so
+  both will happily report stale data mid-run. `best/` is only written when a run
+  finishes. Copy the directory aside before a re-run (`openevolve_output.*/` is
+  gitignored) and don't trust either tool until the run completes.
+- **The seed is not the lever on diversity.** A 200-iteration run from `kaprekar` ended
+  with all 201 programs still containing the descending-minus-ascending step, and
+  seeding `reverse_add` instead did not help: within ~12 iterations it discarded
+  reverse-add as the core and adopted the Kaprekar difference. The anchoring comes from
+  the system message and the in-context top programs. The untried lever is
+  `diff_based_evolution: false`, which swaps "do not rewrite the entire program" for
+  "provide the complete new program code".
+- **One run proves very little.** Across identical configs the best result arrived at
+  iteration 8, 41 and 129, and a novel constant found once (2802) did not reappear in
+  two further runs. Long flat stretches are normal — one run improved after 91 idle
+  iterations — so don't read an early plateau as convergence, and don't conclude a
+  change helped from a single run.
+- If `ScoreWeights` changes, the **system message in every `evolution/config.*.yaml`
+  must change with it**. It states the depth saturation point to the model; leaving it
+  stale means optimising against a threshold that no longer exists.
