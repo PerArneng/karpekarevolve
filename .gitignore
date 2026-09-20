@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# OpenEvolve run output
+openevolve_output/
+openevolve_checkpoints/

@@ -1,0 +1,53 @@
+[project]
+name = "kaprekarevolve"
+version = "0.1.0"
+description = "Evolving Kaprekar-like maps on the four-digit numbers with OpenEvolve"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dependency-injector>=4.49.1",
+    "openevolve>=0.3.2",
+    "pydantic>=2.13.5",
+    "typer>=0.27.2",
+]
+
+[project.scripts]
+kaprekarevolve = "kaprekarevolve.cli.main:main"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.8",
+]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["dependency_injector.*", "openevolve.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "S", "D"]
+ignore = ["D203", "D213", "D100", "D104", "D107"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "D"]
+"evolution/*" = ["E402", "D103"]
+# Implementations do not repeat the docstrings that live on their Protocol.
+"src/kaprekarevolve/modules/*" = ["D102"]
+"src/kaprekarevolve/cli/*" = ["D401"]
